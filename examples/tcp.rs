@@ -19,6 +19,7 @@ impl LanguageServer for Backend {
                     TextDocumentSyncKind::Incremental,
                 )),
                 completion_provider: Some(CompletionOptions {
+                    all_commit_characters: None,
                     resolve_provider: Some(false),
                     trigger_characters: Some(vec![".".to_string()]),
                     work_done_progress_options: Default::default(),
@@ -27,13 +28,12 @@ impl LanguageServer for Backend {
                     commands: vec!["dummy.do_something".to_string()],
                     work_done_progress_options: Default::default(),
                 }),
-                workspace: Some(WorkspaceCapability {
-                    workspace_folders: Some(WorkspaceFolderCapability {
+                workspace: Some(WorkspaceServerCapabilities {
+                    workspace_folders: Some(WorkspaceFoldersServerCapabilities {
                         supported: Some(true),
-                        change_notifications: Some(
-                            WorkspaceFolderCapabilityChangeNotifications::Bool(true),
-                        ),
+                        change_notifications: Some(OneOf::Left(true)),
                     }),
+                    file_operations: None,
                 }),
                 ..ServerCapabilities::default()
             },
@@ -68,12 +68,16 @@ impl LanguageServer for Backend {
             .await;
     }
 
-    async fn execute_command(&self, _: ExecuteCommandParams) -> Result<Option<Value>> {
+    async fn execute_command(&self, params: ExecuteCommandParams) -> Result<Option<Value>> {
         self.client
             .log_message(MessageType::Info, "command executed!")
             .await;
 
-        match self.client.apply_edit(WorkspaceEdit::default()).await {
+        match self
+            .client
+            .apply_edit(Some(params.command), WorkspaceEdit::default())
+            .await
+        {
             Ok(res) if res.applied => self.client.log_message(MessageType::Info, "applied").await,
             Ok(_) => self.client.log_message(MessageType::Info, "rejected").await,
             Err(err) => self.client.log_message(MessageType::Error, err).await,
